@@ -40,11 +40,11 @@ type SignalResp = {
   [k: string]: unknown;
 };
 
-type EquityPoint = { date: string; value: number };
+type EquityPoint = { date: string; equity: number; bnh?: number };
 
 type BacktestResp = {
   stats?: Record<string, number | string>;
-  equity?: EquityPoint[];
+  equity_curve?: EquityPoint[];
   current_state?: string;
   ticker?: string;
   [k: string]: unknown;
@@ -160,10 +160,10 @@ export default function Page() {
               <StateBadge state={backtest.current_state} />
             </div>
           )}
-          {backtest.equity && backtest.equity.length > 0 && (
+          {backtest.equity_curve && backtest.equity_curve.length > 0 && (
             <div className="mb-4 h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={backtest.equity} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                <LineChart data={backtest.equity_curve} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis
                     dataKey="date"
@@ -176,10 +176,12 @@ export default function Page() {
                     tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
-                    formatter={(v: number) => [`$${v.toLocaleString()}`, "Equity"]}
+                    formatter={(v: number, name: string) => [`$${v.toLocaleString()}`, name === "equity" ? "戦略" : "B&H"]}
+                    labelFormatter={(l) => String(l)}
                     contentStyle={{ fontSize: 12, borderRadius: 8 }}
                   />
-                  <Line type="monotone" dataKey="value" stroke="#059669" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="equity" stroke="#059669" strokeWidth={2} dot={false} name="equity" />
+                  <Line type="monotone" dataKey="bnh" stroke="#94a3b8" strokeWidth={1.5} dot={false} name="bnh" strokeDasharray="4 4" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
