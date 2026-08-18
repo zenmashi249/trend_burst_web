@@ -212,7 +212,7 @@ export default function Page() {
             </>
           )}
 
-          {signal.bear_days != null && (
+          {signal.bear_days != null && signal.bear_days > 0 && signal.state !== "tqqq" && (
             <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
               🐻 ベア経過日数: <span className="font-bold">{signal.bear_days}日</span>
             </div>
