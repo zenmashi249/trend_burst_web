@@ -74,6 +74,7 @@ export default function Page() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(overrideParams ?? params),
+        cache: "no-store",
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
@@ -186,7 +187,10 @@ export default function Page() {
             stats={backtest.stats}
           />
           {backtest.equity_curve && backtest.equity_curve.length > 0 && (
-            <div className="mb-4 h-72 w-full">
+            <div
+              className="mb-4 h-72 w-full"
+              key={`${backtest.equity_curve[0]?.date}_${backtest.equity_curve.at(-1)?.date}_${backtest.equity_curve.length}`}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={backtest.equity_curve} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
