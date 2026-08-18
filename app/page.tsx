@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
-const STRICT_PARAMS = {
+const today = () => new Date().toISOString().slice(0, 10);
+
+const buildStrictParams = () => ({
   ticker: "TQQQ",
   inception: "2010-02-11",
   ma_type: "SMA",
@@ -20,13 +22,15 @@ const STRICT_PARAMS = {
   ts_ma_long: 20,
   ts_ma_type: "SMA",
   start_date: "2010-02-11",
-  end_date: "2026-08-14",
+  end_date: today(),
   initial_cap: 10000.0,
   comm_pct: 0.00495,
   comm_max: 22.0,
   tax_rate: 0.20315,
   slippage_pct: 0.001,
-};
+});
+
+const AUTO_FETCH_KEY = "tb_last_auto_fetch";
 
 type SignalResp = {
   ticker?: string;
@@ -50,24 +54,26 @@ type BacktestResp = {
   [k: string]: unknown;
 };
 
+type Params = ReturnType<typeof buildStrictParams>;
+
 export default function Page() {
-  const [params, setParams] = useState(STRICT_PARAMS);
+  const [params, setParams] = useState<Params>(buildStrictParams);
   const [signal, setSignal] = useState<SignalResp | null>(null);
   const [backtest, setBacktest] = useState<BacktestResp | null>(null);
   const [loading, setLoading] = useState<"" | "signal" | "backtest">("");
   const [err, setErr] = useState<string>("");
 
-  const update = <K extends keyof typeof STRICT_PARAMS>(k: K, v: (typeof STRICT_PARAMS)[K]) =>
+  const update = <K extends keyof Params>(k: K, v: Params[K]) =>
     setParams((p) => ({ ...p, [k]: v }));
 
-  const callApi = async (path: "signal" | "backtest") => {
+  const callApi = async (path: "signal" | "backtest", overrideParams?: Params) => {
     setErr("");
     setLoading(path);
     try {
       const res = await fetch(`/api/proxy?path=${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
+        body: JSON.stringify(overrideParams ?? params),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
@@ -80,7 +86,21 @@ export default function Page() {
     }
   };
 
-  const resetStrict = () => setParams(STRICT_PARAMS);
+  const resetStrict = () => setParams(buildStrictParams());
+
+  // 暦日初回アクセス時に自動でバックテスト+シグナル取得
+  useEffect(() => {
+    const t = today();
+    const last = typeof window !== "undefined" ? localStorage.getItem(AUTO_FETCH_KEY) : t;
+    if (last !== t) {
+      const p = buildStrictParams();
+      setParams(p);
+      callApi("backtest", p);
+      callApi("signal", p);
+      if (typeof window !== "undefined") localStorage.setItem(AUTO_FETCH_KEY, t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 pb-safe">
@@ -160,6 +180,11 @@ export default function Page() {
               <StateBadge state={backtest.current_state} />
             </div>
           )}
+          <Summary
+            equityCurve={backtest.equity_curve}
+            initialCap={params.initial_cap}
+            stats={backtest.stats}
+          />
           {backtest.equity_curve && backtest.equity_curve.length > 0 && (
             <div className="mb-4 h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -187,15 +212,101 @@ export default function Page() {
             </div>
           )}
           {backtest.stats && (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {Object.entries(backtest.stats).map(([k, v]) => (
-                <Stat key={k} label={statLabel(k)} v={fmtStat(k, v)} />
-              ))}
-            </div>
+            <details className="group mt-2">
+              <summary className="cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900">
+                📊 詳細スタッツを表示 ({Object.keys(backtest.stats).length}項目)
+              </summary>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {Object.entries(backtest.stats).map(([k, v]) => (
+                  <Stat key={k} label={statLabel(k)} v={fmtStat(k, v)} />
+                ))}
+              </div>
+            </details>
           )}
         </section>
       )}
     </main>
+  );
+}
+
+function Summary({
+  equityCurve, initialCap, stats,
+}: {
+  equityCurve?: EquityPoint[];
+  initialCap: number;
+  stats?: Record<string, number | string>;
+}) {
+  if (!equityCurve || equityCurve.length === 0) return null;
+  const first = equityCurve[0];
+  const last = equityCurve[equityCurve.length - 1];
+  const finalEq = last.equity;
+  const finalBnh = last.bnh ?? 0;
+  const totalReturn = (finalEq - initialCap) / initialCap;
+  const bnhReturn = finalBnh ? (finalBnh - initialCap) / initialCap : 0;
+  const vsBnh = finalBnh ? finalEq / finalBnh - 1 : 0;
+  // 年率化 (実日数ベース)
+  const days = (new Date(last.date).getTime() - new Date(first.date).getTime()) / 86400000;
+  const years = days / 365.25;
+  const cagr = years > 0 ? Math.pow(finalEq / initialCap, 1 / years) - 1 : 0;
+  const maxDD = stats?.max_loss_vs_init_pct;
+  const maxDDNum = typeof maxDD === "number" ? maxDD : Number(maxDD ?? 0);
+
+  const positive = totalReturn >= 0;
+  const heroBg = positive ? "from-emerald-500 to-emerald-600" : "from-rose-500 to-rose-600";
+
+  return (
+    <div className="mb-5">
+      <div className={`rounded-2xl bg-gradient-to-br ${heroBg} p-5 text-white shadow-lg`}>
+        <div className="text-xs opacity-90">最終評価額（{last.date}）</div>
+        <div className="mt-1 flex items-baseline gap-3">
+          <span className="text-3xl font-bold">${finalEq.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          <span className="text-lg font-bold opacity-90">
+            {positive ? "+" : ""}{(totalReturn * 100).toFixed(1)}%
+          </span>
+        </div>
+        <div className="mt-1 text-xs opacity-90">
+          初期資金 ${initialCap.toLocaleString()} → {(finalEq / initialCap).toFixed(2)}倍
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <HeroStat
+          label="年率リターン (CAGR)"
+          value={`${(cagr * 100).toFixed(2)}%`}
+          tone={cagr >= 0 ? "pos" : "neg"}
+        />
+        <HeroStat
+          label="B&H対比"
+          value={`${vsBnh >= 0 ? "+" : ""}${(vsBnh * 100).toFixed(1)}%`}
+          tone={vsBnh >= 0 ? "pos" : "neg"}
+        />
+        <HeroStat
+          label="B&H最終値"
+          value={`$${finalBnh.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+          tone="neutral"
+        />
+        <HeroStat
+          label="最大DD (初期比)"
+          value={`${(maxDDNum * 100).toFixed(2)}%`}
+          tone="warn"
+        />
+      </div>
+    </div>
+  );
+}
+
+function HeroStat({ label, value, tone }: { label: string; value: string; tone: "pos" | "neg" | "neutral" | "warn" }) {
+  const toneCls = {
+    pos: "text-emerald-700 bg-emerald-50 border-emerald-200",
+    neg: "text-rose-700 bg-rose-50 border-rose-200",
+    neutral: "text-gray-700 bg-gray-50 border-gray-200",
+    warn: "text-amber-700 bg-amber-50 border-amber-200",
+  }[tone];
+  return (
+    <div className={`rounded-xl border px-3 py-2.5 ${toneCls}`}>
+      <div className="text-xs opacity-80">{label}</div>
+      <div className="mt-0.5 text-base font-bold">{value}</div>
+    </div>
   );
 }
 
