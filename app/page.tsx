@@ -32,6 +32,14 @@ const buildStrictParams = () => ({
 
 const AUTO_FETCH_KEY = "tb_last_auto_fetch";
 
+type TsInfo = {
+  peak: number;
+  drawdown_pct: number;
+  ts_pct: number;
+  ts_room_pct: number;
+  ts_price: number;
+};
+
 type SignalResp = {
   ticker?: string;
   date?: string;
@@ -41,6 +49,13 @@ type SignalResp = {
   is_bull?: boolean;
   equity?: number;
   notified?: boolean;
+  prev_close?: number;
+  day_change_pct?: number;
+  ma_distance_pct?: number;
+  is_rising?: boolean;
+  buffer_condition_ok?: boolean;
+  bear_days?: number | null;
+  ts_info?: TsInfo | null;
   [k: string]: unknown;
 };
 
@@ -163,12 +178,45 @@ export default function Page() {
               <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">LINE送信済</span>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="終値" v={fmt(signal.close)} />
-            <Stat label="MA" v={fmt(signal.ma)} />
-            <Stat label="Equity" v={fmt(signal.equity)} />
-            <Stat label="ブル判定" v={signal.is_bull ? "✅" : "❌"} />
+
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat
+              label={`終値${signal.day_change_pct != null ? ` (${signal.day_change_pct >= 0 ? "+" : ""}${signal.day_change_pct}%)` : ""}`}
+              v={fmt(signal.close)}
+            />
+            <Stat label="MA (200日)" v={fmt(signal.ma)} />
+            <Stat
+              label="MA乖離率"
+              v={signal.ma_distance_pct != null ? `${signal.ma_distance_pct >= 0 ? "+" : ""}${signal.ma_distance_pct}%` : "-"}
+            />
+            <Stat label="評価額 (USD)" v={fmt(signal.equity)} />
           </div>
+
+          <h3 className="mb-2 text-xs font-bold text-gray-700">📋 シグナル判定条件</h3>
+          <div className="mb-4 space-y-1.5 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <CondRow ok={!!signal.is_rising} label="MA上昇中" />
+            <CondRow ok={!!signal.buffer_condition_ok} label={`終値 > MA (${signal.ma_distance_pct}%乖離)`} />
+            <CondRow ok={!!signal.is_bull} label="ブル判定 (総合)" />
+          </div>
+
+          {signal.ts_info && (
+            <>
+              <h3 className="mb-2 text-xs font-bold text-gray-700">📊 トレーリングストップ状況</h3>
+              <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <Stat label="TS設定" v={`${signal.ts_info.ts_pct}%`} />
+                <Stat label="期中高値" v={`$${signal.ts_info.peak.toFixed(2)}`} />
+                <Stat label="高値からのDD" v={`${signal.ts_info.drawdown_pct}%`} />
+                <Stat label="TS発動まで残り" v={`${signal.ts_info.ts_room_pct}%`} />
+                <Stat label="TS発動価格" v={`$${signal.ts_info.ts_price.toFixed(2)}`} />
+              </div>
+            </>
+          )}
+
+          {signal.bear_days != null && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+              🐻 ベア経過日数: <span className="font-bold">{signal.bear_days}日</span>
+            </div>
+          )}
         </section>
       )}
 
@@ -321,6 +369,19 @@ function fmt(v: unknown): string {
     return String(Math.round(v * 10000) / 10000);
   }
   return String(v);
+}
+
+function CondRow({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className={`inline-block h-5 w-5 shrink-0 rounded-full text-center text-xs font-bold leading-5 ${
+        ok ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
+      }`}>
+        {ok ? "✓" : "✗"}
+      </span>
+      <span className={ok ? "text-gray-900" : "text-gray-500"}>{label}</span>
+    </div>
+  );
 }
 
 function Stat({ label, v }: { label: string; v: string }) {
