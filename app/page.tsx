@@ -189,7 +189,7 @@ export default function Page() {
           {backtest.stats && (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {Object.entries(backtest.stats).map(([k, v]) => (
-                <Stat key={k} label={k} v={fmt(v)} />
+                <Stat key={k} label={statLabel(k)} v={fmtStat(k, v)} />
               ))}
             </div>
           )}
@@ -224,10 +224,55 @@ const STATE_STYLE: Record<string, string> = {
   ts_cash: "bg-red-100 text-red-800",
   ts_safe: "bg-red-100 text-red-800",
 };
+const STATE_LABEL: Record<string, string> = {
+  tqqq: "📈 TQQQ保有中",
+  cash: "💵 現金待機",
+  safe: "🛡️ 避難先保有",
+  ts_cash: "🔴 TS発動（現金）",
+  ts_safe: "🔴 TS発動（避難先）",
+};
 
 function StateBadge({ state }: { state: string }) {
   const cls = STATE_STYLE[state] ?? "bg-gray-100 text-gray-700";
-  return <span className={`rounded-full px-3 py-1 text-xs font-bold ${cls}`}>{state || "?"}</span>;
+  const label = STATE_LABEL[state] ?? state ?? "?";
+  return <span className={`rounded-full px-3 py-1 text-xs font-bold ${cls}`}>{label}</span>;
+}
+
+const STAT_LABEL: Record<string, string> = {
+  tqqq_days: "TQQQ保有日数",
+  cash_days: "現金日数",
+  safe_days: "避難先日数",
+  safe_gain: "避難先損益 (USD)",
+  total_comm: "累計手数料 (USD)",
+  total_tax: "累計税金 (USD)",
+  n_trades: "取引回数",
+  dca_invested: "DCA投資額 (USD)",
+  dca_count: "DCA回数",
+  max_unreal_loss_usd: "最大含み損 (USD)",
+  max_unreal_loss_pct: "最大含み損率",
+  max_unreal_loss_date: "最大含み損 発生日",
+  max_unreal_loss_pct_v: "最大含み損率 (値)",
+  max_unreal_loss_pct_usd: "最大含み損 (率基準USD)",
+  max_unreal_loss_pct_date: "最大含み損率 発生日",
+  max_loss_vs_init_usd: "初期比 最大損失 (USD)",
+  max_loss_vs_init_pct: "初期比 最大損失率",
+  max_loss_vs_init_date: "初期比 最大損失 発生日",
+  max_loss_vs_init_pct_v: "初期比 最大損失率 (値)",
+  max_loss_vs_init_pct_usd: "初期比 最大損失 (率基準USD)",
+  max_loss_vs_init_pct_date: "初期比 最大損失率 発生日",
+};
+function statLabel(key: string): string {
+  return STAT_LABEL[key] ?? key;
+}
+function fmtStat(key: string, v: unknown): string {
+  if (v === null || v === undefined) return "-";
+  if (typeof v === "string" && v.includes("T00:00:00")) return v.slice(0, 10);
+  if (typeof v === "number") {
+    if (key.endsWith("_pct") || key.endsWith("_pct_v")) return `${(v * 100).toFixed(2)}%`;
+    if (Math.abs(v) >= 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return String(Math.round(v * 10000) / 10000);
+  }
+  return String(v);
 }
 
 function Field({
