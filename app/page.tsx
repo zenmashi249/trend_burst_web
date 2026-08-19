@@ -34,6 +34,7 @@ const buildStrictParams = () => ({
 });
 
 const AUTO_FETCH_KEY = "tb_last_auto_fetch";
+const PRESETS_KEY = "tb_presets";
 
 type TsInfo = {
   peak: number;
@@ -106,6 +107,34 @@ export default function Page() {
   };
 
   const resetStrict = () => setParams(buildStrictParams());
+
+  // プリセット管理 (localStorage)
+  const [presets, setPresets] = useState<Record<string, Params>>({});
+  const [presetName, setPresetName] = useState("");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(PRESETS_KEY);
+      if (raw) setPresets(JSON.parse(raw));
+    } catch {}
+  }, []);
+  const persistPresets = (next: Record<string, Params>) => {
+    setPresets(next);
+    if (typeof window !== "undefined") localStorage.setItem(PRESETS_KEY, JSON.stringify(next));
+  };
+  const savePreset = () => {
+    const name = presetName.trim();
+    if (!name) return;
+    persistPresets({ ...presets, [name]: params });
+  };
+  const loadPreset = (name: string) => {
+    if (presets[name]) setParams(presets[name]);
+  };
+  const deletePreset = (name: string) => {
+    const next = { ...presets };
+    delete next[name];
+    persistPresets(next);
+  };
 
   // 暦日初回アクセス時に自動でバックテスト+シグナル取得
   useEffect(() => {
@@ -203,6 +232,54 @@ export default function Page() {
             Error: {err}
           </div>
         )}
+
+        <details className="mt-4">
+          <summary className="cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900">
+            💾 設定の保存・読み込み ({Object.keys(presets).length}件)
+          </summary>
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="プリセット名 (例: 保守型)"
+                className="flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                onClick={savePreset}
+                disabled={!presetName.trim()}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                💾 保存
+              </button>
+            </div>
+            {Object.keys(presets).length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {Object.keys(presets).map((name) => (
+                  <li key={name} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2">
+                    <span className="flex-1 text-sm text-gray-900">{name}</span>
+                    <button
+                      onClick={() => loadPreset(name)}
+                      className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                    >
+                      📂 読込
+                    </button>
+                    <button
+                      onClick={() => deletePreset(name)}
+                      className="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+                    >
+                      🗑
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-gray-500">
+              現在の全パラメータをブラウザ (localStorage) に保存。デバイス間共有はできない。
+            </p>
+          </div>
+        </details>
       </section>
 
       {signal && (
