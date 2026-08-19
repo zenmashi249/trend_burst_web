@@ -28,6 +28,9 @@ const buildStrictParams = () => ({
   comm_max: 22.0,
   tax_rate: 0.20315,
   slippage_pct: 0.001,
+  dca_monthly_jpy: 0,
+  dca_months: 0,
+  dca_fx_rate: 150,
 });
 
 const AUTO_FETCH_KEY = "tb_last_auto_fetch";
@@ -139,6 +142,39 @@ export default function Page() {
           <Field label="開始日" v={params.start_date} on={(v) => update("start_date", String(v))} type="date" />
           <Field label="終了日" v={params.end_date} on={(v) => update("end_date", String(v))} type="date" />
         </div>
+
+        <details className="mt-4">
+          <summary className="cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900">
+            💴 積立設定 (DCA) {params.dca_monthly_jpy > 0 ? `— 月${params.dca_monthly_jpy.toLocaleString()}円×${params.dca_months}ヶ月` : "— 未設定"}
+          </summary>
+          <div className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-3">
+            <Field
+              label="月次積立額 (円)"
+              v={params.dca_monthly_jpy}
+              on={(v) => update("dca_monthly_jpy", Number(v))}
+              type="number"
+              step={10000}
+            />
+            <Field
+              label="積立期間 (ヶ月)"
+              v={params.dca_months}
+              on={(v) => update("dca_months", Number(v))}
+              type="number"
+              step={1}
+            />
+            <Field
+              label="USD/JPY レート"
+              v={params.dca_fx_rate}
+              on={(v) => update("dca_fx_rate", Number(v))}
+              type="number"
+              step={0.1}
+            />
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            バックテスト開始日から毎月第一取引日に「月次積立額 ÷ USD/JPY」USDを追加投資。0=積立なし。
+          </p>
+        </details>
+
         <div className="mt-5 flex flex-wrap gap-2">
           <button
             onClick={() => callApi("signal")}
