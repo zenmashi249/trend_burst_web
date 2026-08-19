@@ -108,6 +108,49 @@ export default function Page() {
 
   const resetStrict = () => setParams(buildStrictParams());
 
+  // LINE通知シグナル設定 (Supabase notification_config)
+  const [notifConfig, setNotifConfig] = useState<{ params: Params | null; updated_at: string | null } | null>(null);
+  const [notifBusy, setNotifBusy] = useState<"" | "load" | "save" | "pull">("");
+  const [notifMsg, setNotifMsg] = useState("");
+  const loadNotifConfig = async () => {
+    setNotifBusy("load");
+    setNotifMsg("");
+    try {
+      const res = await fetch(`/api/proxy?path=notification-config`, { cache: "no-store" });
+      const data = await res.json();
+      setNotifConfig(data);
+    } catch (e) {
+      setNotifMsg(String(e));
+    } finally {
+      setNotifBusy("");
+    }
+  };
+  useEffect(() => { loadNotifConfig(); }, []);
+  const saveNotifConfig = async () => {
+    setNotifBusy("save");
+    setNotifMsg("");
+    try {
+      const res = await fetch(`/api/proxy?path=notification-config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      setNotifMsg("✅ 保存しました。翌朝のLINE通知から反映されます");
+      await loadNotifConfig();
+    } catch (e) {
+      setNotifMsg(`❌ ${e}`);
+    } finally {
+      setNotifBusy("");
+    }
+  };
+  const pullNotifConfigToForm = () => {
+    if (notifConfig?.params) {
+      setParams({ ...buildStrictParams(), ...notifConfig.params });
+      setNotifMsg("📥 現在のLINE通知設定をフォームに読み込みました");
+    }
+  };
+
   // プリセット管理 (localStorage)
   const [presets, setPresets] = useState<Record<string, Params>>({});
   const [presetName, setPresetName] = useState("");
@@ -232,6 +275,54 @@ export default function Page() {
             Error: {err}
           </div>
         )}
+
+        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-xs font-bold text-blue-900">🔔 LINE通知シグナル設定 (Cloud Scheduler用)</div>
+            <button
+              onClick={loadNotifConfig}
+              disabled={notifBusy !== ""}
+              className="text-xs text-blue-700 underline hover:text-blue-900 disabled:opacity-50"
+            >
+              🔄 再読込
+            </button>
+          </div>
+          {notifConfig?.updated_at ? (
+            <div className="mb-2 text-xs text-gray-600">
+              最終更新: {String(notifConfig.updated_at).slice(0, 19).replace("T", " ")}
+              {notifConfig.params && (
+                <>
+                  {" / "}MA={String(notifConfig.params.sma_len)}
+                  {" / "}TS={String(notifConfig.params.ts_pct)}
+                  {" / "}避難={String(notifConfig.params.safe_ticker)}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="mb-2 text-xs text-gray-600">未設定 (厳格モードデフォルトで通知)</div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={saveNotifConfig}
+              disabled={notifBusy !== ""}
+              className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {notifBusy === "save" ? "保存中..." : "📝 現在のパラメータをLINE通知設定として保存"}
+            </button>
+            {notifConfig?.params && (
+              <button
+                onClick={pullNotifConfigToForm}
+                disabled={notifBusy !== ""}
+                className="rounded-xl border border-blue-300 bg-white px-3 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100"
+              >
+                📥 通知設定をフォームに読込
+              </button>
+            )}
+          </div>
+          {notifMsg && (
+            <div className="mt-2 text-xs text-gray-700">{notifMsg}</div>
+          )}
+        </div>
 
         <details className="mt-4">
           <summary className="cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900">

@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
+const ALLOWED_PATHS = ["signal", "backtest", "notification-config"];
+
+async function forward(req: NextRequest, method: "GET" | "POST") {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
   const path = req.nextUrl.searchParams.get("path");
-  if (!path || !["signal", "backtest"].includes(path)) {
+  if (!path || !ALLOWED_PATHS.includes(path)) {
     return NextResponse.json({ error: "invalid path" }, { status: 400 });
   }
   if (!API_URL) {
     return NextResponse.json({ error: "NEXT_PUBLIC_API_URL not set" }, { status: 500 });
   }
-  const body = await req.text();
+  const body = method === "POST" ? await req.text() : undefined;
   try {
     const res = await fetch(`${API_URL}/api/${path}`, {
-      method: "POST",
+      method,
       headers: { "Content-Type": "application/json" },
       body,
     });
@@ -27,6 +29,14 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+export async function GET(req: NextRequest) {
+  return forward(req, "GET");
+}
+
+export async function POST(req: NextRequest) {
+  return forward(req, "POST");
 }
 
 export const runtime = "nodejs";
