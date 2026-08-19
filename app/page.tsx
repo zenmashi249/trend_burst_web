@@ -30,7 +30,6 @@ const buildStrictParams = () => ({
   slippage_pct: 0.001,
   dca_monthly_jpy: 0,
   dca_months: 0,
-  dca_fx_rate: 150,
 });
 
 const AUTO_FETCH_KEY = "tb_last_auto_fetch";
@@ -147,7 +146,7 @@ export default function Page() {
           <summary className="cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900">
             💴 積立設定 (DCA) {params.dca_monthly_jpy > 0 ? `— 月${params.dca_monthly_jpy.toLocaleString()}円×${params.dca_months}ヶ月` : "— 未設定"}
           </summary>
-          <div className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
             <Field
               label="月次積立額 (円)"
               v={params.dca_monthly_jpy}
@@ -162,16 +161,10 @@ export default function Page() {
               type="number"
               step={1}
             />
-            <Field
-              label="USD/JPY レート"
-              v={params.dca_fx_rate}
-              on={(v) => update("dca_fx_rate", Number(v))}
-              type="number"
-              step={0.1}
-            />
           </div>
           <p className="mt-2 text-xs text-gray-500">
-            バックテスト開始日から毎月第一取引日に「月次積立額 ÷ USD/JPY」USDを追加投資。0=積立なし。
+            バックテスト開始日から毎月第一取引日に「月次積立額 ÷ 当日USD/JPY実勢レート」USDを追加投資。
+            USD/JPYは履歴+当日intraday補完で自動取得。0=積立なし。
           </p>
         </details>
 
