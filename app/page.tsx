@@ -23,6 +23,7 @@ const buildStrictParams = () => ({
   ts_ma_type: "SMA",
   start_date: "2010-02-11",
   end_date: today(),
+  initial_jpy: 1000000,
   initial_cap: 10000.0,
   comm_pct: 0.00495,
   comm_max: 22.0,
@@ -140,6 +141,13 @@ export default function Page() {
           <Field label="避難先" v={params.safe_ticker} on={(v) => update("safe_ticker", String(v))} opts={["GLDM", "TLT", "VIG", "BIL"]} />
           <Field label="開始日" v={params.start_date} on={(v) => update("start_date", String(v))} type="date" />
           <Field label="終了日" v={params.end_date} on={(v) => update("end_date", String(v))} type="date" />
+          <Field
+            label="運用初日の元本 (円)"
+            v={params.initial_jpy}
+            on={(v) => update("initial_jpy", Number(v))}
+            type="number"
+            step={100000}
+          />
         </div>
 
         <details className="mt-4">
@@ -260,7 +268,6 @@ export default function Page() {
           )}
           <Summary
             equityCurve={backtest.equity_curve}
-            initialCap={params.initial_cap}
             stats={backtest.stats}
           />
           {backtest.equity_curve && backtest.equity_curve.length > 0 && (
@@ -310,11 +317,16 @@ export default function Page() {
   );
 }
 
+function num(v: unknown, fallback = 0): number {
+  if (typeof v === "number") return v;
+  const n = Number(v);
+  return isNaN(n) ? fallback : n;
+}
+
 function Summary({
-  equityCurve, initialCap, stats,
+  equityCurve, stats,
 }: {
   equityCurve?: EquityPoint[];
-  initialCap: number;
   stats?: Record<string, number | string>;
 }) {
   if (!equityCurve || equityCurve.length === 0) return null;
@@ -322,15 +334,23 @@ function Summary({
   const last = equityCurve[equityCurve.length - 1];
   const finalEq = last.equity;
   const finalBnh = last.bnh ?? 0;
-  const totalReturn = (finalEq - initialCap) / initialCap;
-  const bnhReturn = finalBnh ? (finalBnh - initialCap) / initialCap : 0;
+
+  const totalInvestedUsd = num(stats?.total_invested_usd, num(stats?.initial_cap_usd, 10000));
+  const totalInvestedJpy = num(stats?.total_invested_jpy, 0);
+  const fxEnd = num(stats?.fx_end, 0);
+  const finalEqJpy = fxEnd > 0 ? finalEq * fxEnd : 0;
+
+  // 元本総額 (initial + DCA) 比のリターン
+  const totalReturn = totalInvestedUsd > 0 ? (finalEq - totalInvestedUsd) / totalInvestedUsd : 0;
   const vsBnh = finalBnh ? finalEq / finalBnh - 1 : 0;
-  // 年率化 (実日数ベース)
+
+  // 年率化 (実日数ベース、元本比CAGR)
   const days = (new Date(last.date).getTime() - new Date(first.date).getTime()) / 86400000;
   const years = days / 365.25;
-  const cagr = years > 0 ? Math.pow(finalEq / initialCap, 1 / years) - 1 : 0;
-  const maxDD = stats?.max_loss_vs_init_pct;
-  const maxDDNum = typeof maxDD === "number" ? maxDD : Number(maxDD ?? 0);
+  const cagr = years > 0 && totalInvestedUsd > 0
+    ? Math.pow(finalEq / totalInvestedUsd, 1 / years) - 1
+    : 0;
+  const maxDDNum = num(stats?.max_loss_vs_init_pct, 0);
 
   const positive = totalReturn >= 0;
   const heroBg = positive ? "from-emerald-500 to-emerald-600" : "from-rose-500 to-rose-600";
@@ -339,14 +359,22 @@ function Summary({
     <div className="mb-5">
       <div className={`rounded-2xl bg-gradient-to-br ${heroBg} p-5 text-white shadow-lg`}>
         <div className="text-xs opacity-90">最終評価額（{last.date}）</div>
-        <div className="mt-1 flex items-baseline gap-3">
-          <span className="text-3xl font-bold">${finalEq.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+        <div className="mt-1 flex items-baseline gap-3 flex-wrap">
+          <span className="text-3xl font-bold">
+            ¥{finalEqJpy > 0 ? finalEqJpy.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "-"}
+          </span>
           <span className="text-lg font-bold opacity-90">
             {positive ? "+" : ""}{(totalReturn * 100).toFixed(1)}%
           </span>
         </div>
         <div className="mt-1 text-xs opacity-90">
-          初期資金 ${initialCap.toLocaleString()} → {(finalEq / initialCap).toFixed(2)}倍
+          ${finalEq.toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+          {fxEnd > 0 && ` (レート ${fxEnd.toFixed(2)})`}
+        </div>
+        <div className="mt-2 text-xs opacity-90">
+          元本総額 {totalInvestedJpy > 0 && `¥${totalInvestedJpy.toLocaleString()} / `}
+          ${totalInvestedUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
+          → {(finalEq / totalInvestedUsd).toFixed(2)}倍
         </div>
       </div>
 
@@ -453,6 +481,13 @@ const STAT_LABEL: Record<string, string> = {
   n_trades: "取引回数",
   dca_invested: "DCA投資額 (USD)",
   dca_count: "DCA回数",
+  initial_cap_usd: "初期資金 (USD)",
+  initial_cap_jpy: "初期資金 (円)",
+  dca_total_jpy: "DCA総額 (円)",
+  total_invested_usd: "元本総額 (USD)",
+  total_invested_jpy: "元本総額 (円)",
+  fx_start: "USD/JPY 開始日",
+  fx_end: "USD/JPY 終了日",
   max_unreal_loss_usd: "最大含み損 (USD)",
   max_unreal_loss_pct: "最大含み損率",
   max_unreal_loss_date: "最大含み損 発生日",
