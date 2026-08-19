@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceArea, Brush } from "recharts";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -62,7 +62,7 @@ type SignalResp = {
   [k: string]: unknown;
 };
 
-type EquityPoint = { date: string; equity: number; bnh?: number };
+type EquityPoint = { date: string; equity: number; bnh?: number; state?: string };
 
 type BacktestResp = {
   stats?: Record<string, number | string>;
@@ -271,33 +271,72 @@ export default function Page() {
             stats={backtest.stats}
           />
           {backtest.equity_curve && backtest.equity_curve.length > 0 && (
-            <div
-              className="mb-4 h-72 w-full"
-              key={`${backtest.equity_curve[0]?.date}_${backtest.equity_curve.at(-1)?.date}_${backtest.equity_curve.length}`}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={backtest.equity_curve} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 10, fill: "#6b7280" }}
-                    tickFormatter={(v) => String(v).slice(0, 7)}
-                    minTickGap={40}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "#6b7280" }}
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    formatter={(v: number, name: string) => [`$${v.toLocaleString()}`, name === "equity" ? "戦略" : "B&H"]}
-                    labelFormatter={(l) => String(l)}
-                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  />
-                  <Line type="monotone" dataKey="equity" stroke="#059669" strokeWidth={2} dot={false} name="equity" />
-                  <Line type="monotone" dataKey="bnh" stroke="#94a3b8" strokeWidth={1.5} dot={false} name="bnh" strokeDasharray="4 4" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <div
+                className="mb-2 h-80 w-full"
+                key={`${backtest.equity_curve[0]?.date}_${backtest.equity_curve.at(-1)?.date}_${backtest.equity_curve.length}`}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={backtest.equity_curve} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    {buildStateSegments(backtest.equity_curve).map((seg, i) => (
+                      <ReferenceArea
+                        key={i}
+                        x1={seg.x1}
+                        x2={seg.x2}
+                        fill={STATE_BG[seg.state] ?? "transparent"}
+                        fillOpacity={0.25}
+                        strokeOpacity={0}
+                        ifOverflow="visible"
+                      />
+                    ))}
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10, fill: "#6b7280" }}
+                      tickFormatter={(v) => String(v).slice(0, 7)}
+                      minTickGap={40}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "#6b7280" }}
+                      tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                    />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [`$${v.toLocaleString()}`, name === "equity" ? "戦略" : "B&H"]}
+                      labelFormatter={(l) => String(l)}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                    />
+                    <Line type="monotone" dataKey="equity" stroke="#059669" strokeWidth={2} dot={false} name="equity" isAnimationActive={false} />
+                    <Line type="monotone" dataKey="bnh" stroke="#94a3b8" strokeWidth={1.5} dot={false} name="bnh" strokeDasharray="4 4" isAnimationActive={false} />
+                    <Brush
+                      dataKey="date"
+                      height={24}
+                      stroke="#059669"
+                      travellerWidth={10}
+                      tickFormatter={(v) => String(v).slice(0, 7)}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mb-4 flex flex-wrap gap-3 text-xs text-gray-600">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded" style={{ background: STATE_BG.tqqq, opacity: 0.5 }}></span>
+                  TQQQ保有
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded" style={{ background: STATE_BG.cash, opacity: 0.5 }}></span>
+                  現金
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded" style={{ background: STATE_BG.safe, opacity: 0.5 }}></span>
+                  避難先 (GLDM)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded" style={{ background: STATE_BG.ts_cash, opacity: 0.5 }}></span>
+                  TS発動
+                </span>
+                <span className="ml-auto text-gray-400">下部スライダーで拡大/移動</span>
+              </div>
+            </>
           )}
           {backtest.stats && (
             <details className="group mt-2">
@@ -315,6 +354,31 @@ export default function Page() {
       )}
     </main>
   );
+}
+
+const STATE_BG: Record<string, string> = {
+  tqqq: "#10b981",     // 緑: TQQQ保有
+  cash: "#e5e7eb",     // グレー: 現金
+  safe: "#f59e0b",     // アンバー: 避難先(GLDM)
+  ts_cash: "#f87171",  // 淡赤: TS発動-現金
+  ts_safe: "#fb923c",  // オレンジ: TS発動-避難先
+};
+
+function buildStateSegments(equityCurve: EquityPoint[]): { x1: string; x2: string; state: string }[] {
+  const segments: { x1: string; x2: string; state: string }[] = [];
+  if (equityCurve.length === 0) return segments;
+  let currentState = equityCurve[0].state ?? "";
+  let startDate = equityCurve[0].date;
+  for (let i = 1; i < equityCurve.length; i++) {
+    const s = equityCurve[i].state ?? "";
+    if (s !== currentState) {
+      segments.push({ x1: startDate, x2: equityCurve[i - 1].date, state: currentState });
+      currentState = s;
+      startDate = equityCurve[i].date;
+    }
+  }
+  segments.push({ x1: startDate, x2: equityCurve[equityCurve.length - 1].date, state: currentState });
+  return segments;
 }
 
 function num(v: unknown, fallback = 0): number {
