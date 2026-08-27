@@ -154,6 +154,9 @@ export default function Page() {
   // プリセット管理 (localStorage)
   const [presets, setPresets] = useState<Record<string, Params>>({});
   const [presetName, setPresetName] = useState("");
+  const [yMinInput, setYMinInput] = useState("");
+  const [yMaxInput, setYMaxInput] = useState("");
+  const [yLog, setYLog] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -467,6 +470,12 @@ export default function Page() {
                     <YAxis
                       tick={{ fontSize: 10, fill: "#6b7280" }}
                       tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                      scale={yLog ? "log" : "auto"}
+                      domain={[
+                        yMinInput && !isNaN(Number(yMinInput)) ? Number(yMinInput) : "auto",
+                        yMaxInput && !isNaN(Number(yMaxInput)) ? Number(yMaxInput) : "auto",
+                      ] as [number | "auto", number | "auto"]}
+                      allowDataOverflow={!!(yMinInput || yMaxInput)}
                     />
                     <Tooltip
                       formatter={(v: number, name: string) => [`$${v.toLocaleString()}`, name === "equity" ? "戦略" : "B&H"]}
@@ -503,6 +512,40 @@ export default function Page() {
                   TS発動
                 </span>
                 <span className="ml-auto text-gray-400">下部スライダーで拡大/移動</span>
+              </div>
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                <span className="font-medium">Y軸:</span>
+                <label className="flex items-center gap-1">
+                  最小
+                  <input
+                    type="number"
+                    value={yMinInput}
+                    onChange={(e) => setYMinInput(e.target.value)}
+                    placeholder="auto"
+                    className="w-24 rounded border border-gray-300 px-2 py-1 text-xs"
+                  />
+                </label>
+                <label className="flex items-center gap-1">
+                  最大
+                  <input
+                    type="number"
+                    value={yMaxInput}
+                    onChange={(e) => setYMaxInput(e.target.value)}
+                    placeholder="auto"
+                    className="w-24 rounded border border-gray-300 px-2 py-1 text-xs"
+                  />
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={yLog} onChange={(e) => setYLog(e.target.checked)} />
+                  対数
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setYMinInput(""); setYMaxInput(""); setYLog(false); }}
+                  className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                >
+                  リセット
+                </button>
               </div>
             </>
           )}
