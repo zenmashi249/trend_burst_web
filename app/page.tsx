@@ -212,7 +212,14 @@ export default function Page() {
           <Field label="バッファ% (buffer_pct)" v={params.buffer_pct} on={(v) => update("buffer_pct", Number(v))} type="number" step={0.1} />
           <Field label="EXIT遅延 (exit_delay)" v={params.exit_delay} on={(v) => update("exit_delay", Number(v))} type="number" />
           <Field label="TS% (ts_pct)" v={params.ts_pct} on={(v) => update("ts_pct", Number(v))} type="number" step={0.01} />
-          <Field label="TS再エントリー" v={params.ts_reentry_mode} on={(v) => update("ts_reentry_mode", String(v))} opts={["A", "B"]} />
+          <div>
+            <Field label="TS再エントリー" v={params.ts_reentry_mode} on={(v) => update("ts_reentry_mode", String(v))} opts={["A", "B"]} />
+            <p className="mt-1 text-[10px] leading-tight text-gray-500">
+              {params.ts_reentry_mode === "A"
+                ? "A: 価格回復N日でベア中でも即再エントリー（積極的）"
+                : "B: 価格回復N日 + 短期MA>長期MA のクロス確認（保守的）"}
+            </p>
+          </div>
           <Field label="避難先" v={params.safe_ticker} on={(v) => update("safe_ticker", String(v))} opts={["GLDM", "TLT", "VIG", "BIL"]} />
           <Field label="開始日" v={params.start_date} on={(v) => update("start_date", String(v))} type="date" />
           <Field label="終了日" v={params.end_date} on={(v) => update("end_date", String(v))} type="date" />
@@ -291,14 +298,31 @@ export default function Page() {
             </button>
           </div>
           {notifConfig?.updated_at ? (
-            <div className="mb-2 text-xs text-gray-600">
-              最終更新: {String(notifConfig.updated_at).slice(0, 19).replace("T", " ")}
+            <div className="mb-2">
+              <div className="text-xs text-gray-600">
+                最終更新: {String(notifConfig.updated_at).slice(0, 19).replace("T", " ")}
+                {notifConfig.params && (
+                  <>
+                    {" / "}MA={String(notifConfig.params.sma_len)}
+                    {" / "}TS={String(notifConfig.params.ts_pct)}
+                    {" / "}避難={String(notifConfig.params.safe_ticker)}
+                  </>
+                )}
+              </div>
               {notifConfig.params && (
-                <>
-                  {" / "}MA={String(notifConfig.params.sma_len)}
-                  {" / "}TS={String(notifConfig.params.ts_pct)}
-                  {" / "}避難={String(notifConfig.params.safe_ticker)}
-                </>
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[11px] text-blue-700 hover:text-blue-900">
+                    📋 全パラメータを表示 ({Object.keys(notifConfig.params).length}項目)
+                  </summary>
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 text-[11px] sm:grid-cols-3">
+                    {Object.entries(notifConfig.params).map(([k, v]) => (
+                      <div key={k} className="flex justify-between gap-2">
+                        <span className="text-gray-500">{k}</span>
+                        <span className="font-mono text-gray-800">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           ) : (
