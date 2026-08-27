@@ -130,10 +130,12 @@ export default function Page() {
     setNotifBusy("save");
     setNotifMsg("");
     try {
+      // 通知設定はシグナル判定用途。バックテスト用フィールドは除外して保存
+      const notifParams = { ...params, start_date: null, end_date: null, dca_monthly_jpy: 0, dca_months: 0 };
       const res = await fetch(`/api/proxy?path=notification-config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
+        body: JSON.stringify(notifParams),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setNotifMsg("✅ 保存しました。翌朝のLINE通知から反映されます");
