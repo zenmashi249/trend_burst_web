@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_PATHS = ["signal", "backtest", "notification-config"];
+const ALLOWED_PATHS = ["signal", "backtest", "signal-config"];
 
 async function forward(req: NextRequest, method: "GET" | "POST") {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "";

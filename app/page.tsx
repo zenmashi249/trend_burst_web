@@ -52,7 +52,6 @@ type SignalResp = {
   ma?: number;
   is_bull?: boolean;
   equity?: number;
-  notified?: boolean;
   prev_close?: number;
   day_change_pct?: number;
   ma_distance_pct?: number;
@@ -108,48 +107,47 @@ export default function Page() {
 
   const resetStrict = () => setParams(buildStrictParams());
 
-  // LINE通知シグナル設定 (Supabase notification_config)
-  const [notifConfig, setNotifConfig] = useState<{ params: Params | null; updated_at: string | null } | null>(null);
-  const [notifBusy, setNotifBusy] = useState<"" | "load" | "save" | "pull">("");
-  const [notifMsg, setNotifMsg] = useState("");
-  const loadNotifConfig = async () => {
-    setNotifBusy("load");
-    setNotifMsg("");
+  // sui用シグナル設定 (/signal.json の計算パラメータ)
+  const [signalConfig, setSignalConfig] = useState<{ params: Params | null; updated_at: string | null } | null>(null);
+  const [configBusy, setConfigBusy] = useState<"" | "load" | "save" | "pull">("");
+  const [configMsg, setConfigMsg] = useState("");
+  const loadSignalConfig = async () => {
+    setConfigBusy("load");
+    setConfigMsg("");
     try {
-      const res = await fetch(`/api/proxy?path=notification-config`, { cache: "no-store" });
+      const res = await fetch(`/api/proxy?path=signal-config`, { cache: "no-store" });
       const data = await res.json();
-      setNotifConfig(data);
+      setSignalConfig(data);
     } catch (e) {
-      setNotifMsg(String(e));
+      setConfigMsg(String(e));
     } finally {
-      setNotifBusy("");
+      setConfigBusy("");
     }
   };
-  useEffect(() => { loadNotifConfig(); }, []);
-  const saveNotifConfig = async () => {
-    setNotifBusy("save");
-    setNotifMsg("");
+  useEffect(() => { loadSignalConfig(); }, []);
+  const saveSignalConfig = async () => {
+    setConfigBusy("save");
+    setConfigMsg("");
     try {
-      // 通知設定はシグナル判定用途。バックテスト用フィールドは除外して保存
-      const notifParams = { ...params, start_date: null, end_date: null, dca_monthly_jpy: 0, dca_months: 0 };
-      const res = await fetch(`/api/proxy?path=notification-config`, {
+      // 期間・積立などバックテスト専用フィールドはバックエンドが除外して保存
+      const res = await fetch(`/api/proxy?path=signal-config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(notifParams),
+        body: JSON.stringify(params),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      setNotifMsg("✅ 保存しました。翌朝のLINE通知から反映されます");
-      await loadNotifConfig();
+      setConfigMsg("✅ 保存しました。/signal.json に最大1時間で反映されます");
+      await loadSignalConfig();
     } catch (e) {
-      setNotifMsg(`❌ ${e}`);
+      setConfigMsg(`❌ ${e}`);
     } finally {
-      setNotifBusy("");
+      setConfigBusy("");
     }
   };
-  const pullNotifConfigToForm = () => {
-    if (notifConfig?.params) {
-      setParams({ ...buildStrictParams(), ...notifConfig.params });
-      setNotifMsg("📥 現在のLINE通知設定をフォームに読み込みました");
+  const pullSignalConfigToForm = () => {
+    if (signalConfig?.params) {
+      setParams({ ...buildStrictParams(), ...signalConfig.params });
+      setConfigMsg("📥 現在のsui用設定をフォームに読み込みました");
     }
   };
 
@@ -290,34 +288,36 @@ export default function Page() {
 
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-xs font-bold text-blue-900">🔔 LINE通知シグナル設定 (Cloud Scheduler用)</div>
+            <div className="text-xs font-bold text-blue-900">
+              🤖 sui用シグナル設定 (<a href="/signal.json" target="_blank" rel="noreferrer" className="underline">/signal.json</a>)
+            </div>
             <button
-              onClick={loadNotifConfig}
-              disabled={notifBusy !== ""}
+              onClick={loadSignalConfig}
+              disabled={configBusy !== ""}
               className="text-xs text-blue-700 underline hover:text-blue-900 disabled:opacity-50"
             >
               🔄 再読込
             </button>
           </div>
-          {notifConfig?.updated_at ? (
+          {signalConfig?.updated_at ? (
             <div className="mb-2">
               <div className="text-xs text-gray-600">
-                最終更新: {String(notifConfig.updated_at).slice(0, 19).replace("T", " ")}
-                {notifConfig.params && (
+                最終更新: {String(signalConfig.updated_at).slice(0, 19).replace("T", " ")}
+                {signalConfig.params && (
                   <>
-                    {" / "}MA={String(notifConfig.params.sma_len)}
-                    {" / "}TS={String(notifConfig.params.ts_pct)}
-                    {" / "}避難={String(notifConfig.params.safe_ticker)}
+                    {" / "}MA={String(signalConfig.params.sma_len)}
+                    {" / "}TS={String(signalConfig.params.ts_pct)}
+                    {" / "}避難={String(signalConfig.params.safe_ticker)}
                   </>
                 )}
               </div>
-              {notifConfig.params && (
+              {signalConfig.params && (
                 <details className="mt-1">
                   <summary className="cursor-pointer text-[11px] text-blue-700 hover:text-blue-900">
-                    📋 全パラメータを表示 ({Object.keys(notifConfig.params).length}項目)
+                    📋 全パラメータを表示 ({Object.keys(signalConfig.params).length}項目)
                   </summary>
                   <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 text-[11px] sm:grid-cols-3">
-                    {Object.entries(notifConfig.params).map(([k, v]) => (
+                    {Object.entries(signalConfig.params).map(([k, v]) => (
                       <div key={k} className="flex justify-between gap-2">
                         <span className="text-gray-500">{k}</span>
                         <span className="font-mono text-gray-800">{String(v)}</span>
@@ -328,28 +328,28 @@ export default function Page() {
               )}
             </div>
           ) : (
-            <div className="mb-2 text-xs text-gray-600">未設定 (厳格モードデフォルトで通知)</div>
+            <div className="mb-2 text-xs text-gray-600">未設定 (厳格モードデフォルトで配信)</div>
           )}
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={saveNotifConfig}
-              disabled={notifBusy !== ""}
+              onClick={saveSignalConfig}
+              disabled={configBusy !== ""}
               className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {notifBusy === "save" ? "保存中..." : "📝 現在のパラメータをLINE通知設定として保存"}
+              {configBusy === "save" ? "保存中..." : "📝 現在のパラメータをsui用設定として保存"}
             </button>
-            {notifConfig?.params && (
+            {signalConfig?.params && (
               <button
-                onClick={pullNotifConfigToForm}
-                disabled={notifBusy !== ""}
+                onClick={pullSignalConfigToForm}
+                disabled={configBusy !== ""}
                 className="rounded-xl border border-blue-300 bg-white px-3 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100"
               >
-                📥 通知設定をフォームに読込
+                📥 sui用設定をフォームに読込
               </button>
             )}
           </div>
-          {notifMsg && (
-            <div className="mt-2 text-xs text-gray-700">{notifMsg}</div>
+          {configMsg && (
+            <div className="mt-2 text-xs text-gray-700">{configMsg}</div>
           )}
         </div>
 
@@ -408,9 +408,6 @@ export default function Page() {
           <div className="mb-3 flex items-center gap-2">
             <StateBadge state={String(signal.state ?? "")} />
             <span className="text-xs text-gray-500">{signal.date}</span>
-            {signal.notified && (
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">LINE送信済</span>
-            )}
           </div>
 
           <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
